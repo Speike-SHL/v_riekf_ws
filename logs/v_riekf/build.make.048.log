@@ -1,0 +1,11 @@
+[ 16%] [32mBuilding CXX object CMakeFiles/v_riekf_node.dir/src/InEKF/InEKF.cpp.o[0m
+[01m[K/home/speike/v_riekf_ws/src/V-RIEKF/v_riekf/src/InEKF/InEKF.cpp:[m[K In member function ‘[01m[Kvoid inekf::InEKF::Correct(const inekf::Observation&)[m[K’:
+[01m[K/home/speike/v_riekf_ws/src/V-RIEKF/v_riekf/src/InEKF/InEKF.cpp:281:21:[m[K [01;31m[Kerror: [m[Kredeclaration of ‘[01m[KEigen::MatrixXd Z[m[K’
+  281 |     Eigen::MatrixXd [01;31m[KZ[m[K = BigX * obs.Y - obs.b;   //TODO Z是一个稀疏矩阵
+      |                     [01;31m[K^[m[K
+[01m[K/home/speike/v_riekf_ws/src/V-RIEKF/v_riekf/src/InEKF/InEKF.cpp:278:21:[m[K [01;36m[Knote: [m[K‘[01m[KEigen::MatrixXd Z[m[K’ previously declared here
+  278 |     Eigen::MatrixXd [01;36m[KZ[m[K = BigX * Y_Sparse - b_Sparse;   //TODO Z是一个稀疏矩阵
+      |                     [01;36m[K^[m[K
+make[2]: *** [CMakeFiles/v_riekf_node.dir/build.make:90：CMakeFiles/v_riekf_node.dir/src/InEKF/InEKF.cpp.o] 错误 1
+make[1]: *** [CMakeFiles/Makefile2:673：CMakeFiles/v_riekf_node.dir/all] 错误 2
+make: *** [Makefile:146：all] 错误 2

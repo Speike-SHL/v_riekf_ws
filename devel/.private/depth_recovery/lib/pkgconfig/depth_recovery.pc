@@ -1,0 +1,8 @@
+prefix=/home/speike/v_riekf_ws/devel/.private/depth_recovery
+
+Name: depth_recovery
+Description: Description of depth_recovery
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

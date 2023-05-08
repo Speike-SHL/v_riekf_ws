@@ -1,0 +1,5 @@
+_workspace_packages=( ${(Q)"${(z)$(<<\EO:_workspace_packages
+'camera_model' 'depth_recovery' 'feature_tracker' 'origin_data' 'v_riekf'
+EO:_workspace_packages
+)}"} )
+_workspace_cache_file_path='/home/speike/v_riekf_ws/.catkin_tools/cache'

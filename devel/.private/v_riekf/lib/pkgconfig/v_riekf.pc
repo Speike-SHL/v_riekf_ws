@@ -1,0 +1,8 @@
+prefix=/home/speike/v_riekf_ws/devel/.private/v_riekf
+
+Name: v_riekf
+Description: Description of v_riekf
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

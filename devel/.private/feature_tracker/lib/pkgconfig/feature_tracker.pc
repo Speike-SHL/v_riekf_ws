@@ -1,0 +1,8 @@
+prefix=/home/speike/v_riekf_ws/devel/.private/feature_tracker
+
+Name: feature_tracker
+Description: Description of feature_tracker
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

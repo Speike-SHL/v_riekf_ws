@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC  -DBOOST_BIND_GLOBAL_PLACEHOLDERS -O3 -march=native -shared -Wl,-soname,libgmock_main.so -o ../lib/libgmock_main.so CMakeFiles/gmock_main.dir/src/gmock_main.cc.o  -Wl,-rpath,/home/speike/v_riekf_ws/build/v_riekf/gtest/lib ../lib/libgmock.so ../lib/libgtest.so -lpthread 

@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "ROS",
+            "browse": {
+                "databaseFilename": "${default}",
+                "limitSymbolsToIncludedHeaders": true   //智能提示只搜索包含的头文件，速度快
+            },
+            "includePath": [
+                "${workspaceFolder}/src/**",
+                "/opt/ros/noetic/include/**",
+                "/usr/local/include/**",
+                "/usr/local/cuda/**"
+            ],
+            "intelliSenseMode": "${default}",
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "c++17",
+            // "configurationProvider": "ms-vscode.cmake-tools",
+            "configurationProvider": "b2.catkin-tools",
+            "compileCommands": "${workspaceFolder}/build/catkin_tools_prebuild/compile_commands.json"
+        }
+    ],
+    "version": 4
+}

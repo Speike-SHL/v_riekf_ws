@@ -1,8 +1,0 @@
-prefix=/home/speike/v_riekf_ws/install
-
-Name: origin_data
-Description: Description of origin_data
-Version: 0.0.0
-Cflags: 
-Libs: -L${prefix}/lib 
-Requires: 

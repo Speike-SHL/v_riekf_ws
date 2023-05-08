@@ -1,1 +1,0 @@
-/home/speike/v_riekf_ws/devel/.private/v_riekf/lib/pkgconfig/v_riekf.pc

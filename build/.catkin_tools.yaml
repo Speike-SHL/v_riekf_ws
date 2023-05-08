@@ -1,6 +1,0 @@
-devel_space: /home/speike/v_riekf_ws/devel
-install: false
-install_space: /home/speike/v_riekf_ws/install
-profile: default
-source_space: /home/speike/v_riekf_ws/src
-workspace: /home/speike/v_riekf_ws

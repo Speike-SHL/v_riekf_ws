@@ -1,1 +1,0 @@
-/home/speike/v_riekf_ws/devel/.private/catkin_tools_prebuild/setup.zsh

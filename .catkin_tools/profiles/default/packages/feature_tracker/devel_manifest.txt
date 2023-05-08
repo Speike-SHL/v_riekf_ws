@@ -1,6 +1,0 @@
-V-RIEKF/feature_tracker
-/home/speike/v_riekf_ws/devel/.private/feature_tracker/cmake.lock /home/speike/v_riekf_ws/devel/./cmake.lock
-/home/speike/v_riekf_ws/devel/.private/feature_tracker/share/feature_tracker/cmake/feature_trackerConfig-version.cmake /home/speike/v_riekf_ws/devel/share/feature_tracker/cmake/feature_trackerConfig-version.cmake
-/home/speike/v_riekf_ws/devel/.private/feature_tracker/share/feature_tracker/cmake/feature_trackerConfig.cmake /home/speike/v_riekf_ws/devel/share/feature_tracker/cmake/feature_trackerConfig.cmake
-/home/speike/v_riekf_ws/devel/.private/feature_tracker/lib/pkgconfig/feature_tracker.pc /home/speike/v_riekf_ws/devel/lib/pkgconfig/feature_tracker.pc
-/home/speike/v_riekf_ws/devel/.private/feature_tracker/lib/feature_tracker/feature_tracker_node /home/speike/v_riekf_ws/devel/lib/feature_tracker/feature_tracker_node

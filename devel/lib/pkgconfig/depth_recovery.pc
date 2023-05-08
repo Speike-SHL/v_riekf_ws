@@ -1,1 +1,0 @@
-/home/speike/v_riekf_ws/devel/.private/depth_recovery/lib/pkgconfig/depth_recovery.pc

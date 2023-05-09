@@ -14,6 +14,7 @@
 #include "InEKF/InEKF.h"
 #include "tic_toc.h"
 #include <fstream>
+#include <unistd.h>
 
 namespace inekf {
 
@@ -26,8 +27,10 @@ void removeRowAndColumn(Eigen::MatrixXd& M, int index);
 Observation::Observation(Eigen::VectorXd& Y, Eigen::VectorXd& b, Eigen::MatrixXd& H, Eigen::MatrixXd& N, Eigen::MatrixXd& PI) :
     Y(Y), b(b), H(H), N(N), PI(PI) {}
 
+Observation::Observation(Eigen::SparseMatrix<double>& Y_sparse, Eigen::SparseMatrix<double> &b_sparse, Eigen::SparseMatrix<double>& H_sparse, Eigen::SparseMatrix<double>& N_sparse, Eigen::SparseMatrix<double>& PI_sparse) : Y_sparse(Y_sparse), b_sparse(b_sparse), H_sparse(H_sparse), N_sparse(N_sparse), PI_sparse(PI_sparse) {}
+
 /// @brief 检查观测Y中是否为空,空返回1,非空返回0 
-bool Observation::empty() { return Y.rows() == 0; }
+bool Observation::empty() { return (Y_sparse.rows() == 0 && Y.rows() == 0 );  }
 
 /// @brief 重载<<运算符,按格式输出 Y b H N PI 
 ostream& operator<<(ostream& os, const Observation& o) {
@@ -254,64 +257,58 @@ void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt) {
  */
 void InEKF::Correct(const Observation &obs)
 {
-    TicToc t_correct;
-    TicToc t_step;
-    // Compute Kalman Gain
+    // Compute Kalman Gain      //TODO: 优化计算Kalman增益的时间，已经是稀疏计算了
     Eigen::MatrixXd P = state_.getP();
-    Eigen::MatrixXd PHT = P * obs.H.transpose();
-    Eigen::MatrixXd S = obs.H * PHT + obs.N;
-    Eigen::MatrixXd K = PHT * S.inverse();
-    cout << "Kalman Gain: " << t_step.toc() << " ms" << endl;
+    Eigen::MatrixXd PHT = P * obs.H_sparse.transpose();
+    Eigen::MatrixXd S = obs.H_sparse * PHT + obs.N_sparse;
+    Eigen::MatrixXd K = PHT * S.llt().solve(Eigen::MatrixXd::Identity(S.rows(), S.cols()));
 
     // Copy X along the diagonals if more than one measurement
-    t_step.tic();
     Eigen::SparseMatrix<double> BigX;
-    state_.copyDiagX(obs.Y.rows() / state_.dimX(), BigX);
-    cout << "Copy X: " << t_step.toc() << " ms" << endl;
+    state_.copyDiagX(obs.Y_sparse.rows() / state_.dimX(), BigX);
 
     // Compute correction terms
-    t_step.tic();
-    Eigen::MatrixXd Z = BigX * obs.Y - obs.b;   //TODO Z是一个稀疏矩阵
-    cout << "Z:" << t_step.toc() << " ms" << endl;
-
-    t_step.tic();
-    Eigen::VectorXd delta = K * obs.PI * Z;     //TODO delta是一个稠密矩阵
-    cout << "delta: " << t_step.toc() << " ms" << endl;
-
-    t_step.tic();
+    Eigen::MatrixXd Z = obs.PI_sparse * BigX * obs.Y_sparse;
+    Eigen::VectorXd delta = K * Z;
     Eigen::MatrixXd dX = Exp_SEK3(delta.segment(0, delta.rows() - state_.dimTheta()));
     Eigen::VectorXd dTheta = delta.segment(delta.rows() - state_.dimTheta(), state_.dimTheta());
-    cout << "dX: " << t_step.toc() << " ms" << endl;
 
     // Update state
-    t_step.tic();
     Eigen::MatrixXd X_new = dX * state_.getX(); // Right-Invariant Update
     Eigen::VectorXd Theta_new = state_.getTheta() + dTheta;
     state_.setX(X_new);
     state_.setTheta(Theta_new);
-    cout << "Update state: " << t_step.toc() << " ms" << endl;
 
-    // Update Covariance
-    t_step.tic();
-    Eigen::MatrixXd IKH = Eigen::MatrixXd::Identity(state_.dimP(), state_.dimP()) - K * obs.H;
-    Eigen::MatrixXd P_new = IKH * P * IKH.transpose() + K * obs.N * K.transpose(); // Joseph update form
-    cout << "Update Covariance: " << t_step.toc() << " ms" << endl; 
-
+    // Update Covariance    //TODO: 优化计算协方差的时间，已经是稀疏计算了
+    Eigen::MatrixXd IKH = Eigen::MatrixXd::Identity(state_.dimP(), state_.dimP()) - K * obs.H_sparse;
+    Eigen::MatrixXd P_new = IKH * P * IKH.transpose() + K * obs.N_sparse * K.transpose(); // Joseph update form
     state_.setP(P_new);
-    cout << "Correct: " << t_correct.toc() << "ms" << endl;
 }
 
 /// Create Observation from vector of landmark measurements
 /// @param[in] measured_landmarks 储存了观测到的 Landmark 列表, <id 地标相对于body的p.3x1>
 void InEKF::CorrectLandmarks(const vectorLandmarks &measured_landmarks)
-{
+{   
     Eigen::VectorXd Y;
+    Eigen::SparseMatrix<double> Y_sparse;
     Eigen::VectorXd b;
+    Eigen::SparseMatrix<double> b_sparse;
     Eigen::MatrixXd H;
+    Eigen::SparseMatrix<double> H_sparse;
     Eigen::MatrixXd N;
+    Eigen::SparseMatrix<double> N_sparse;
     Eigen::MatrixXd PI;
+    Eigen::SparseMatrix<double> PI_sparse;
+    int expand_times = 0; //N和PI矩阵扩展的次数
+    vector<Eigen::Triplet<double>> tripletList_Y;
+    vector<Eigen::Triplet<double>> tripletList_b;
+    vector<Eigen::Triplet<double>> tripletList_H;
+    tripletList_Y.reserve(200 * 5); // 预分配足够内存,最大每张图200个特征点
+    tripletList_b.reserve(200 * 2);
+    tripletList_H.reserve(200 * 6);
 
     Eigen::Matrix3d R = state_.getRotation();
+
     //复制一个储存了已经加入状态估计的<id,索引>的map容器,最后这个容器中剩下的元素即为要删除的landmarks
     std::map<int, int> estimated_landmarks_copy = estimated_landmarks_;
     vectorLandmarks new_landmarks;  // 新增的landmarks列表
@@ -408,8 +405,9 @@ void InEKF::CorrectLandmarks(const vectorLandmarks &measured_landmarks)
         {
             // Found in estimated landmark set
             int dimX = state_.dimX();
-            int dimP = state_.dimP();
             int startIndex;
+
+            expand_times += 1;
 
             /// - 构造Y矩阵
             /// @f[\mathrm{Y}_{\mathrm{t}}=\left[ \begin{array}{c}
@@ -423,12 +421,12 @@ void InEKF::CorrectLandmarks(const vectorLandmarks &measured_landmarks)
             /// 	-1\text{处为动态地标id在当前状态X中的列位置},\\
             /// 	\text{若有多个观测，就是多个Y}_{\mathrm{t}}\text{的垂直累加}\\
             /// \end{array}\,\,\, \right)@f]
-            startIndex = Y.rows();
-            Y.conservativeResize(startIndex + dimX, Eigen::NoChange);
-            Y.segment(startIndex, dimX) = Eigen::VectorXd::Zero(dimX);
-            Y.segment(startIndex, 3) = it->position; // p_bl
-            Y(startIndex + 4) = 1;
-            Y(startIndex + it_estimated->second) = -1;
+            startIndex = dimX * (expand_times - 1);
+            tripletList_Y.push_back(Eigen::Triplet<double>(startIndex, 0, it->position[0]));
+            tripletList_Y.push_back(Eigen::Triplet<double>(startIndex + 1, 0, it->position[1]));
+            tripletList_Y.push_back(Eigen::Triplet<double>(startIndex + 2, 0, it->position[2]));
+            tripletList_Y.push_back(Eigen::Triplet<double>(startIndex + 4, 0, 1));
+            tripletList_Y.push_back(Eigen::Triplet<double>(startIndex + it_estimated->second, 0, -1));
 
             /// - 构造b矩阵
             /// @f[\mathrm{b}=\left[ \begin{array}{c}
@@ -442,11 +440,9 @@ void InEKF::CorrectLandmarks(const vectorLandmarks &measured_landmarks)
             /// 	-1\text{处为动态地标id在当前状态X中的列位置},\\
             /// 	\text{若有多个观测，就是多个b的垂直累加}\\
             /// \end{array}\,\,\, \right)@f] 
-            startIndex = b.rows();
-            b.conservativeResize(startIndex + dimX, Eigen::NoChange);
-            b.segment(startIndex, dimX) = Eigen::VectorXd::Zero(dimX);
-            b(startIndex + 4) = 1;
-            b(startIndex + it_estimated->second) = -1;
+            startIndex = dimX * (expand_times - 1);
+            tripletList_b.push_back(Eigen::Triplet<double>(startIndex + 4, 0, 1));
+            tripletList_b.push_back(Eigen::Triplet<double>(startIndex + it_estimated->second, 0, -1));
 
             /// - 构造H矩阵
             /// @f[\mathrm{H}_{\mathrm{t}}=\left[ \begin{array}{llllll:ll}
@@ -456,20 +452,17 @@ void InEKF::CorrectLandmarks(const vectorLandmarks &measured_landmarks)
             /// 	\text{最后两个}0\text{是bias项},\text{对观测无影响，直接为}0\\
             /// 	\text{若有多个观测},\text{就是多个H}_{\mathrm{t}}\text{的垂直累加}\\
             /// \end{array} \right)@f]
-            startIndex = H.rows();
-            H.conservativeResize(startIndex + 3, dimP);
-            H.block(startIndex, 0, 3, dimP) = Eigen::MatrixXd::Zero(3, dimP);
-            H.block(startIndex, 6, 3, 3) = -Eigen::Matrix3d::Identity();                           // -I
-            H.block(startIndex, 3 * it_estimated->second - 6, 3, 3) = Eigen::Matrix3d::Identity(); // I
+            startIndex = 3 * (expand_times - 1);
+            tripletList_H.push_back(Eigen::Triplet<double>(startIndex, 6, -1));
+            tripletList_H.push_back(Eigen::Triplet<double>(startIndex + 1, 7, -1));
+            tripletList_H.push_back(Eigen::Triplet<double>(startIndex + 2, 8, -1));
+            tripletList_H.push_back(Eigen::Triplet<double>(startIndex, 3 * it_estimated->second - 6, 1));
+            tripletList_H.push_back(Eigen::Triplet<double>(startIndex + 1, 3 * it_estimated->second - 5, 1));
+            tripletList_H.push_back(Eigen::Triplet<double>(startIndex + 2, 3 * it_estimated->second - 4, 1));
 
             /// - 构造N矩阵
             /// @f[\bar{\mathrm{N}}_{\mathrm{t}}=\bar{\mathrm{R}}_{\mathrm{t}}\mathrm{Cov}\left( \mathrm{w}_{\mathrm{t}}^{\mathrm{l}} \right) \bar{\mathrm{R}}_{\mathrm{t}}^{\top}\,\,_{3\times 3}\,\,\left( \text{若有多个观测},\text{就是多个N阵的对角叠加} \right)@f]
-            startIndex = N.rows();
-            N.conservativeResize(startIndex + 3, startIndex + 3);
-            N.block(startIndex, 0, 3, startIndex) = Eigen::MatrixXd::Zero(3, startIndex);
-            N.block(0, startIndex, startIndex, 3) = Eigen::MatrixXd::Zero(startIndex, 3);
-            N.block(startIndex, startIndex, 3, 3) = R * noise_params_.getLandmarkCov() * R.transpose();
-
+            
             /// - 构造@f$\Pi@f$矩阵
             /// @f[\Pi =\left[ \begin{matrix}
             /// 	\mathrm{I}_{3\times 3}&		0&		0&		\cdots&		0&		\cdots\\
@@ -477,14 +470,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks &measured_landmarks)
             /// 	\text{后一个}0\text{是当前动态地标id在状态X中的位置}\\
             /// 	\text{若有多个观测，则对角累加}\Pi\\
             /// \end{array} \right)@f]
-            startIndex = PI.rows();
-            int startIndex2 = PI.cols();
-            PI.conservativeResize(startIndex + 3, startIndex2 + dimX);
-            PI.block(startIndex, 0, 3, startIndex2) = Eigen::MatrixXd::Zero(3, startIndex2);
-            PI.block(0, startIndex2, startIndex, dimX) = Eigen::MatrixXd::Zero(startIndex, dimX);
-            PI.block(startIndex, startIndex2, 3, dimX) = Eigen::MatrixXd::Zero(3, dimX);
-            PI.block(startIndex, startIndex2, 3, 3) = Eigen::Matrix3d::Identity();
-
+            
             // 从estimated_landmarks_copy中删除该找到的元素
             estimated_landmarks_copy.erase(it_estimated);
         }
@@ -494,11 +480,45 @@ void InEKF::CorrectLandmarks(const vectorLandmarks &measured_landmarks)
             new_landmarks.push_back(*it);
         }
     }
-    // cout << "1:" << estimated_landmarks_copy.size() << endl;
+
+
+    // 构造矩阵放在循环外操作，减少重复修改内存带来的花销
+    //-------------------------------构造Y矩阵-----------------------------------
+    Y_sparse.resize(state_.dimX() * expand_times, 1);
+    Y_sparse.setFromTriplets(tripletList_Y.begin(), tripletList_Y.end());
+    //-------------------------------构造b矩阵-----------------------------------
+    b_sparse.resize(state_.dimX() * expand_times, 1);
+    b_sparse.setFromTriplets(tripletList_b.begin(), tripletList_b.end());
+    //-------------------------------构造H矩阵-----------------------------------
+    H_sparse.resize(3 * expand_times, state_.dimP());
+    H_sparse.setFromTriplets(tripletList_H.begin(), tripletList_H.end());
+    //-------------------------------构造N矩阵-----------------------------------
+    N_sparse.resize(3 * expand_times, 3 * expand_times);
+    vector<Eigen::Triplet<double>> tripletList;
+    tripletList.reserve(9 * expand_times);
+    Eigen::Matrix3d RCovmR =  R * noise_params_.getLandmarkCov() * R.transpose();
+    for (int k = 0; k < expand_times; ++k)
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                tripletList.push_back(Eigen::Triplet<double>(3 * k + i, 3 * k + j, RCovmR(i, j)));
+    N_sparse.setFromTriplets(tripletList.begin(), tripletList.end());
+    tripletList.clear();
+    //-------------------------------构造PI矩阵-----------------------------------
+    PI_sparse.resize(3 * expand_times, state_.dimX() * expand_times);
+    tripletList.reserve(3 * expand_times);
+    for (int k = 0; k < expand_times;++k)
+    {
+        tripletList.push_back(Eigen::Triplet<double>(3 * k, state_.dimX() * k, 1));
+        tripletList.push_back(Eigen::Triplet<double>(3 * k + 1, state_.dimX() * k + 1, 1));
+        tripletList.push_back(Eigen::Triplet<double>(3 * k + 2, state_.dimX() * k + 2, 1));
+    }
+    PI_sparse.setFromTriplets(tripletList.begin(), tripletList.end());
+
+
 
     /// 4.当前帧观测数据处理结束,根据构造的Y b H N PI矩阵, 调用 Correct() 函数进行更新, 静态和动态地标同时构造Y, 进行更新
-        /// 即每帧观测只进行一次更新过程
-    Observation obs(Y, b, H, N, PI);
+    /// 即每帧观测只进行一次更新过程
+    Observation obs(Y_sparse, b_sparse, H_sparse, N_sparse, PI_sparse);
     if (!obs.empty())
     {
         this->Correct(obs);
@@ -540,7 +560,7 @@ void InEKF::CorrectLandmarks(const vectorLandmarks &measured_landmarks)
 
     /// 5.向滤波器中增加新检测到的地标, 即对 new_landmarks 列表进行操作
     /// @note 在对地标的检测中,不同于正向运动学更新,不需要从状态中删除地标
-    if (new_landmarks.size() > 0)
+    if (new_landmarks.size() > 0)   //TODO：优化新增地标操作，很耗时，尤其是更新P时
     {
         Eigen::MatrixXd X_aug = state_.getX();
         Eigen::MatrixXd P_aug = state_.getP();

@@ -62,7 +62,7 @@ class Observation {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         Observation(Eigen::VectorXd& Y, Eigen::VectorXd& b, Eigen::MatrixXd& H, Eigen::MatrixXd& N, Eigen::MatrixXd& PI);
-
+        Observation(Eigen::SparseMatrix<double>& Y_sparse, Eigen::SparseMatrix<double> &b_sparse, Eigen::SparseMatrix<double>& H_sparse, Eigen::SparseMatrix<double>& N_sparse, Eigen::SparseMatrix<double>& PI_sparse);
         bool empty();
 
         Eigen::VectorXd Y;
@@ -71,10 +71,14 @@ class Observation {
         Eigen::MatrixXd N;
         Eigen::MatrixXd PI;
 
-        
+        Eigen::SparseMatrix<double> Y_sparse;
+        Eigen::SparseMatrix<double> b_sparse;
+        Eigen::SparseMatrix<double> H_sparse;
+        Eigen::SparseMatrix<double> N_sparse;
+        Eigen::SparseMatrix<double> PI_sparse;
+
         friend std::ostream& operator<<(std::ostream& os, const Observation& o);  
 };
-
 
 class InEKF {
     

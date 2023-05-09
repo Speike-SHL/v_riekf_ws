@@ -193,7 +193,7 @@ int main(int argc, char** argv)
     /*--------------------------ROS节点处理初始化--------------------------*/
     ros::init(argc, argv, "v_riekf_node");
     ros::NodeHandle nh;
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     //订阅(u,v,1),Z
     ros::Subscriber feature_points_depth_sub = nh.subscribe<sensor_msgs::PointCloud>("/depth_recovery/feature_points_depth_pub", 2000, feature_points_depth_callback);
     //订阅IMU

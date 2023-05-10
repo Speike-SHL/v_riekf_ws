@@ -13,8 +13,6 @@
 
 #include "InEKF/InEKF.h"
 #include "tic_toc.h"
-#include <fstream>
-#include <unistd.h>
 
 namespace inekf {
 
@@ -47,16 +45,18 @@ ostream& operator<<(ostream& os, const Observation& o) {
 // ------------ InEKF -------------
 // finished主要为了保证向量大小和内存的完整定义,提升代码的健壮性,因为用的临时对象流式创建。
 /// 默认构造,设置g_ = [0;0;-9.81]
-InEKF::InEKF() : g_((Eigen::VectorXd(3) << 0,0,-9.81).finished()){}
+InEKF::InEKF() : g_((Eigen::VectorXd(3) << 0,0,-9.81).finished()), skew_g_(skew(g_)) {}
 
 /// 初始化g_ = [0;0;-9.81] 和 NoiseParams
-InEKF::InEKF(NoiseParams params) : g_((Eigen::VectorXd(3) << 0,0,-9.81).finished()), noise_params_(params) {}
+InEKF::InEKF(NoiseParams params) : g_((Eigen::VectorXd(3) << 0,0,-9.81).finished()), noise_params_(params), skew_g_(skew(g_)) {}
 
 /// 初始化g_ = [0;0;-9.81] 和 RobotState
-InEKF::InEKF(RobotState state) : g_((Eigen::VectorXd(3) << 0,0,-9.81).finished()), state_(state) {}
+InEKF::InEKF(RobotState state) : g_((Eigen::VectorXd(3) << 0,0,-9.81).finished()), state_(state), skew_g_(skew(g_)) {}
 
 /// 初始化g_ = [0;0;-9.81]、 RobotState 和 NoiseParams
-InEKF::InEKF(RobotState state, NoiseParams params) : g_((Eigen::VectorXd(3) << 0,0,-9.81).finished()), state_(state), noise_params_(params) {}
+InEKF::InEKF(RobotState state, NoiseParams params) : g_((Eigen::VectorXd(3) << 0,0,-9.81).finished()), state_(state), noise_params_(params), skew_g_(skew(g_)) {}
+
+InEKF::InEKF(RobotState state, NoiseParams params, Eigen::Vector3d g) : g_(g), state_(state), noise_params_(params), skew_g_(skew(g_)) {}
 
 // Return robot's current state
 RobotState InEKF::getState() { 
@@ -76,6 +76,15 @@ NoiseParams InEKF::getNoiseParams() {
 // Sets the filter's noise parameters
 void InEKF::setNoiseParams(NoiseParams params) { 
     noise_params_ = params; 
+}
+
+Eigen::Vector3d InEKF::getG() { 
+    return g_; 
+}
+
+void InEKF::setG(const Eigen::Vector3d& g) {
+    this->g_ = g;
+    this->skew_g_ = skew(g_);
 }
 
 // Return filter's prior (static) landmarks
@@ -133,7 +142,6 @@ std::map<int,bool> InEKF::getContacts() {
 
 /// InEKF Propagation - 惯性数据
 void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt) {
-
     /// 1.bias修正后的角速度和加速度 
     /// @f[
     /// \begin{array}{c}
@@ -181,37 +189,54 @@ void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt) {
     int dimX = state_.dimX();
     int dimP = state_.dimP();
     int dimTheta = state_.dimTheta();
-    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(dimP,dimP);
-    // Inertial terms
-    A.block<3,3>(3,0) = skew(g_); // TODO: Efficiency could be improved by not computing the constant terms every time
-    A.block<3,3>(6,3) = Eigen::Matrix3d::Identity();
-    // Bias terms
-    A.block<3,3>(0,dimP-dimTheta) = -R;
-    A.block<3,3>(3,dimP-dimTheta+3) = -R;
-    for (int i=3; i<dimX; ++i) {
-        A.block<3,3>(3*i-6,dimP-dimTheta) = -skew(X.block<3,1>(0,i))*R;
-    }
-    // cout << A << endl;   // XXX:
+
+    Eigen::SparseMatrix<double> A_sparse(dimP,dimP);
+    vector<Eigen::Triplet<double>> tripletList;
+    tripletList.reserve(9*dimX + 4);
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+        {
+            tripletList.push_back(Eigen::Triplet<double>(3 + i, j, skew_g_(i, j)));
+            tripletList.push_back(Eigen::Triplet<double>(i, dimP - dimTheta + j, -R(i, j)));
+            tripletList.push_back(Eigen::Triplet<double>(3 + i, dimP - dimTheta + 3 + j, -R(i, j)));
+        }
+    for (int i = 0; i < 3; i++)
+        tripletList.push_back(Eigen::Triplet<double>(6 + i, 3 + i, 1));
+    for (int k = 3; k < dimX; k++)
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)
+            {   
+                Eigen::Matrix3d skew_XR = -skew(X.block<3, 1>(0, k))*R.eval();
+                tripletList.push_back(Eigen::Triplet<double>(3 * k - 6 + i, dimP - dimTheta + j, skew_XR(i, j)));
+            }
+    A_sparse.setFromTriplets(tripletList.begin(), tripletList.end());
 
     /// 4.计算过程噪声协方差矩阵Qk,中间可能会有Contact项
-    /// @f[\mathrm{Q}_{\mathrm{k}}=\left[ \begin{matrix}
-	/// \mathrm{Q}_{\mathrm{g}}&		0&		0&		\cdots&		0&		0\\
-	/// 0&		\mathrm{Q}_{\mathrm{a}}&		0&		\cdots&		0&		0\\
-	/// 0&		0&		0&		\cdots&		0&		0\\
-	/// \vdots&		\vdots&		\vdots&		\ddots&		\vdots&		\vdots\\
-	/// 0&		0&		0&		\cdots&		\mathrm{Q}_{\mathrm{bg}}&		0\\
-	/// 0&		0&		0&		\cdots&		0&		\mathrm{Q}_{\mathrm{ba}}\\
-    /// \end{matrix} \right] _{\left( 15+3\mathrm{n} \right) \times \left( 15+3\mathrm{n} \right)}@f]
-    Eigen::MatrixXd Qk = Eigen::MatrixXd::Zero(dimP,dimP); // Landmark noise terms will remain zero
-    Qk.block<3,3>(0,0) = noise_params_.getGyroscopeCov(); 
-    Qk.block<3,3>(3,3) = noise_params_.getAccelerometerCov();
+        /// @f[\mathrm{Q}_{\mathrm{k}}=\left[ \begin{matrix}
+        /// \mathrm{Q}_{\mathrm{g}}&		0&		0&		\cdots&		0&		0\\
+/// 0&		\mathrm{Q}_{\mathrm{a}}&		0&		\cdots&		0&		0\\
+/// 0&		0&		0&		\cdots&		0&		0\\
+/// \vdots&		\vdots&		\vdots&		\ddots&		\vdots&		\vdots\\
+/// 0&		0&		0&		\cdots&		\mathrm{Q}_{\mathrm{bg}}&		0\\
+/// 0&		0&		0&		\cdots&		0&		\mathrm{Q}_{\mathrm{ba}}\\
+/// \end{matrix} \right] _{\left( 15+3\mathrm{n} \right) \times \left( 15+3\mathrm{n} \right)}@f]
+    Eigen::SparseMatrix<double> Qk_sparse(dimP,dimP);
+    tripletList.clear();
+    tripletList.reserve(3*dimP);
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++)
+        {
+            tripletList.push_back(Eigen::Triplet<double>(i,j,noise_params_.getGyroscopeCov()(i,j)));
+            tripletList.push_back(Eigen::Triplet<double>(3 + i, 3 + j, noise_params_.getAccelerometerCov()(i,j)));
+            tripletList.push_back(Eigen::Triplet<double>(dimP - dimTheta + i, dimP - dimTheta + j, noise_params_.getGyroscopeBiasCov()(i,j)));
+            tripletList.push_back(Eigen::Triplet<double>(dimP - dimTheta + 3 + i, dimP - dimTheta + 3 + j, noise_params_.getAccelerometerBiasCov()(i,j)));
+        }
     //HACK 下面不是很懂，为什么不对estimated_landmarks_操作
-    for(map<int,int>::iterator it=estimated_contact_positions_.begin(); it!=estimated_contact_positions_.end(); ++it) {
-        Qk.block<3,3>(3+3*(it->second-3),3+3*(it->second-3)) = noise_params_.getContactCov(); // Contact noise terms
-    }
-    Qk.block<3,3>(dimP-dimTheta,dimP-dimTheta) = noise_params_.getGyroscopeBiasCov();
-    Qk.block<3,3>(dimP-dimTheta+3,dimP-dimTheta+3) = noise_params_.getAccelerometerBiasCov();
-    // cout << Qk << endl;  // XXX:
+    for(map<int,int>::iterator it=estimated_contact_positions_.begin(); it!=estimated_contact_positions_.end(); ++it)
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)   
+                tripletList.push_back(Eigen::Triplet<double>(3 + 3*(it->second-3) + i, 3 + 3*(it->second-3) + j, noise_params_.getContactCov()(i,j)));
+    Qk_sparse.setFromTriplets(tripletList.begin(), tripletList.end());
 
     /// 5.对系统误差协方差矩阵计算公式离散化并更新系统误差协方差阵
     /// @f[\begin{array}{l}
@@ -228,19 +253,32 @@ void InEKF::Propagate(const Eigen::Matrix<double,6,1>& m, double dt) {
     ///	 \Phi _{\mathrm{k}}=\exp \left( \mathrm{A}\Delta \mathrm{t} \right) \approx \mathrm{I}+\mathrm{A}\Delta \mathrm{t}\\
     ///	 \mathrm{Q}_{\mathrm{k}}=\Phi _{\mathrm{k}}\mathrm{Q}_{\mathrm{t}}{\Phi _{\mathrm{k}}}^{\mathrm{T}}\Delta \mathrm{t}\\
     /// \end{array}@f]
-    Eigen::MatrixXd I = Eigen::MatrixXd::Identity(dimP,dimP);
-    Eigen::MatrixXd Phi = I + A*dt; // TODO: Fast approximation of exp(A*dt). explore using the full exp() instead
-    Eigen::MatrixXd Adj = I;
-    Adj.block(0,0,dimP-dimTheta,dimP-dimTheta) = Adjoint_SEK3(X); // Approx 200 microseconds
-    Eigen::MatrixXd PhiAdj = Phi * Adj;
-    Eigen::MatrixXd Qk_hat = PhiAdj * Qk * PhiAdj.transpose() * dt; // Approximated discretized noise matrix (faster by 400 microseconds)
-
+    Eigen::SparseMatrix<double> I(dimP, dimP);
+    I.setIdentity();
+    // TODO: 更准确的计算矩阵指数
+    Eigen::SparseMatrix<double> Phi = I + A_sparse*dt;
+    Eigen::SparseMatrix<double> Adj(dimP,dimP);
+    tripletList.clear();
+    tripletList.reserve((dimP-dimTheta)*(dimP-dimTheta)+dimTheta);
+    Eigen::MatrixXd AdjSEK3 = Adjoint_SEK3(X);
+    for (int i = 0; i < dimP; i++)
+        for (int j = 0; j < dimP; j++)
+        {
+            if(i<dimP-dimTheta && j<dimP-dimTheta)
+                tripletList.push_back(Eigen::Triplet<double>(i,j,AdjSEK3(i,j)));
+            else if(i>=dimP-dimTheta && j>=dimP-dimTheta && i==j)
+                tripletList.push_back(Eigen::Triplet<double>(i, j, 1));
+            else
+                continue;
+        }
+    Adj.setFromTriplets(tripletList.begin(), tripletList.end());
+    Eigen::SparseMatrix<double> PhiAdj = Phi * Adj;
+    Eigen::SparseMatrix<double> Qk_hat = PhiAdj * Qk_sparse * PhiAdj.transpose() * dt;
     // Propagate Covariance
     Eigen::MatrixXd P_pred = Phi * P * Phi.transpose() + Qk_hat;
 
     // Set new covariance
     state_.setP(P_pred);
-
     return;
 }
 

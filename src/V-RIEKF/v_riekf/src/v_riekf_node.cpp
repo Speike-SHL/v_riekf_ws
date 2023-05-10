@@ -42,7 +42,7 @@ double t_prev = 0;
 void pub_state()
 {
     //XXX 显示状态估计结果
-    // cout << std::fixed << std::setprecision(2) << filter.getState() << endl;  
+    cout << std::fixed << std::setprecision(2) << filter.getState() << endl;  
     geometry_msgs::PoseStamped poses;
     nav_msgs::Odometry riekf_esti_msg;
     // 获取当前状态
@@ -150,12 +150,23 @@ void imu_measure_callback(const sensor_msgs::ImuConstPtr &imu_measure)
 int main(int argc, char** argv)
 {
     setlocale(LC_ALL, "");
+    /*--------------------------ROS节点处理初始化--------------------------*/
+    ros::init(argc, argv, "v_riekf_node");
+    ros::NodeHandle nh;
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+    double GyroNoise = ros::param::param<double>("/v_riekf_node/GyroNoise", 0.02);
+    double AcceNoise = ros::param::param<double>("/v_riekf_node/AcceNoise", 0.02);
+    double GyroBiasNoise = ros::param::param<double>("/v_riekf_node/GyroBiasNoise", 0);
+    double AcceBiasNoise = ros::param::param<double>("/v_riekf_node/AcceBiasNoise", 0);
+    double LandmarkNoise = ros::param::param<double>("/v_riekf_node/LandmarkNoise", 0.04);
+
     /*-----------------------------参数初始化----------------------------*/
     K << 443.1871, 0.0, 320.5185, 0.0, 443.1156, 240.1581, 0.0, 0.0, 1.0;
     K_inv = K.inverse();
     // R_bc << 0.7073883, 0.0, 0.7068252, 0.0, 1.0, 0.0, -0.7068252, 0.0, 0.7073883;   //FIXME 坐标变换
     R_bc << 0.0007963, 0.0, 0.9999997, 0.0, 1.0, 0.0, -0.9999997, 0.0, 0.0007963;
     R_ << 0, 0, 1, -1, 0, 0, 0, -1, 0;
+
     /*---------------------------状态估计初始化---------------------------*/
     //  ---- Initialize invariant extended Kalman filter ----- //
     RobotState initial_state;
@@ -176,24 +187,22 @@ int main(int argc, char** argv)
 
     // Initialize state covariance
     NoiseParams noise_params;
-    noise_params.setGyroscopeNoise(0.02);   //FIXME 噪声数据
-    noise_params.setAccelerometerNoise(0.02);
-    noise_params.setGyroscopeBiasNoise(0);
-    noise_params.setAccelerometerBiasNoise(0);
-    noise_params.setLandmarkNoise(0.04);
+    noise_params.setGyroscopeNoise(GyroNoise);
+    noise_params.setAccelerometerNoise(AcceNoise);
+    noise_params.setGyroscopeBiasNoise(GyroBiasNoise);
+    noise_params.setAccelerometerBiasNoise(AcceBiasNoise);
+    noise_params.setLandmarkNoise(LandmarkNoise);
 
     // Initialize filter
     filter.setState(initial_state);
     filter.setNoiseParams(noise_params);
+    filter.setG(Eigen::Vector3d(0, 0, -3.72));  //FIXME 重力加速度
     // cout << "Noise parameters are initialized to: \n";
     // cout << filter.getNoiseParams() << endl;
     // cout << "Robot's state is initialized to: \n";
     // cout << filter.getState() << endl;
 
-    /*--------------------------ROS节点处理初始化--------------------------*/
-    ros::init(argc, argv, "v_riekf_node");
-    ros::NodeHandle nh;
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+
     //订阅(u,v,1),Z
     ros::Subscriber feature_points_depth_sub = nh.subscribe<sensor_msgs::PointCloud>("/depth_recovery/feature_points_depth_pub", 2000, feature_points_depth_callback);
     //订阅IMU

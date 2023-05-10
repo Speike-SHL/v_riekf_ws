@@ -65,9 +65,12 @@ void FeatureTracker::readImage(const cv::Mat &_img, double _cur_time)
         // 进行光流追踪!!!
         cv::calcOpticalFlowPyrLK(cur_img, forw_img, cur_pts, forw_pts, status, err, cv::Size(21, 21), 3);
 
+        float max_err = *max_element(err.begin(), err.end());
+        float avg_err = accumulate(err.begin(), err.end(), 0.0) / err.size();
+
         // 剔除位于图像边界外的点,如果跟踪成功且不在图像边界内,标记为0
         for (int i = 0; i < int(forw_pts.size()); i++)
-            if (status[i] && !inBorder(forw_pts[i]))
+            if (status[i] && (!inBorder(forw_pts[i]) || err[i] > (max_err + avg_err)/2))
                 status[i] = 0;
 
         int size_old = cur_pts.size();

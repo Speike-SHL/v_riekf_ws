@@ -3,14 +3,14 @@
     <!-- 获取数据节点, DataSetPath(数据集路径), Rata(节点发布频率), End_flag(最后一帧数据的时间戳,用于退出节点) -->
     <node name="origin_data_node" pkg="origin_data" type="origin_data_node" output="screen">
         <param name="DataSetPath" value="/media/speike/Data/DataSet/Data/imu_noise" type="string"/>
-        <param name="End_Flag" value="60.32800000" type="string"/>
+        <param name="End_Flag" value="120.28000000" type="string"/>
         <param name="Rate" value="125" type="int"/>
     </node>
 
     <!-- 特征提取节点, CAMERA_INTRINSICS_PATH(相机内参文件路径), MAX_CNT(特征点最大个数)-->
     <node name="feature_tracker_node" pkg="feature_tracker" type="feature_tracker_node" output="screen">
         <param name="CAMERA_INTRINSICS_PATH" value="$(find feature_tracker)/config/camera.yaml" type="string"/>
-        <param name="MAX_CNT" value="50" type="int"/>
+        <param name="MAX_CNT" value="40" type="int"/>
     </node>
 
     <!-- 获取深度节点,MAX_RANGE(深度相机最大范围),MIN_RANGE(深度相机最小范围) -->
@@ -19,8 +19,15 @@
         <param name="MIN_RANGE" value="0.01" type="double"/>
     </node>
 
-    <node name="v_riekf_node" pkg="v_riekf" type="v_riekf_node" output="screen"/>
-
+    <!-- RIEKF节点, GyroNoise(陀螺仪噪声), AcceNoise(加速度计噪声), GyroBiasNoise(陀螺仪偏置噪声), AcceBiasNoise(加速度计偏置噪声), LandmarkNoise(路标点噪声) -->
+    <node name="v_riekf_node" pkg="v_riekf" type="v_riekf_node" output="screen">
+        <!-- //FIXME 噪声数据 -->
+        <param name="GyroNoise" value="1" type="double"/>     
+        <param name="AcceNoise" value="1" type="double"/>
+        <param name="GyroBiasNoise" value="0" type="double"/>
+        <param name="AcceBiasNoise" value="0" type="double"/>
+        <param name="LandmarkNoise" value="1" type="double"/>
+    </node>
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find v_riekf)/config/v_riekf_display.rviz"/>
 
 </launch>

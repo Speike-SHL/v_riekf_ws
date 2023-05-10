@@ -3,6 +3,7 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <eigen3/Eigen/Dense>
+#include <numeric>
 #include "parameters.h"
 #include "tic_toc.h"
 

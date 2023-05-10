@@ -248,10 +248,23 @@ ostream& operator<<(ostream& os, const RobotState& s) {
 #if INEKF_USE_MUTEX
     unique_lock<mutex> mlock(s.mutex_);
 #endif
+    //定义矩阵储存要输出的数据
+    Eigen::Matrix<double, 3, 7> X_Theta;
+    X_Theta.block<3, 5>(0, 0) = s.X_.block<3, 5>(0, 0);
+    X_Theta.block<3, 1>(0, 5) = s.Theta_.head(3);
+    X_Theta.block<3, 1>(0, 6) = s.Theta_.tail(3);
+
+    //打印精度
+    int precision = 2;
+
     os << "--------------------------- Robot State --------------------------" << endl;
-    os << "X:\n" << s.X_ << endl << endl;
-    os << "Theta:\n" << s.Theta_ << endl << endl;
-    os << "P:\n" << s.P_ << endl;
+    os << left << setprecision(precision) << fixed;
+    os << setw(3*(precision+4)) << "R:" << setw(precision+4) << "v:" << setw(precision+4) << "p:" << setw(precision+4) << "bg:" << setw(precision+4) << "ba:" << endl;
+    os << X_Theta << endl << endl;
+
+    // os << "X:\n" << s.X_ << endl << endl;
+    // os << "Theta:\n" << s.Theta_ << endl << endl;
+    // os << "P:\n" << s.P_ << endl;
     os << "------------------------------------------------------------------";
     return os;  
 } 

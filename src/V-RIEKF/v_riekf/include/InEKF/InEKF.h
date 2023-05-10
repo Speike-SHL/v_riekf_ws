@@ -14,7 +14,11 @@
 #ifndef INEKF_H
 #define INEKF_H 
 #include <Eigen/Dense>
+#include <unsupported/Eigen/MatrixFunctions>
+#include <Eigen/Sparse>
 #include <iostream>
+#include <fstream>
+#include <unistd.h>
 #include <vector>
 #include <map>
 #if INEKF_USE_MUTEX
@@ -88,15 +92,18 @@ class InEKF {
         InEKF(NoiseParams params);
         InEKF(RobotState state);
         InEKF(RobotState state, NoiseParams params);
+        InEKF(RobotState state, NoiseParams params, Eigen::Vector3d g);
 
         RobotState getState();
         NoiseParams getNoiseParams();
+        Eigen::Vector3d getG();
         mapIntVector3d getPriorLandmarks();
         std::map<int,int> getEstimatedLandmarks();
         std::map<int,bool> getContacts();
         std::map<int,int> getEstimatedContactPositions();
         void setState(RobotState state);
         void setNoiseParams(NoiseParams params);
+        void setG(const Eigen::Vector3d& g);
         void setPriorLandmarks(const mapIntVector3d& prior_landmarks);
         void setContacts(std::vector<std::pair<int,bool> > contacts);
 
@@ -108,7 +115,8 @@ class InEKF {
     private:
         RobotState state_;
         NoiseParams noise_params_;
-        const Eigen::Vector3d g_; /// Gravity
+        Eigen::Vector3d g_; /// Gravity
+        Eigen::Matrix3d skew_g_;
         mapIntVector3d prior_landmarks_;    /// 静态地标<id p_wl>
         std::map<int,int> estimated_landmarks_;   /// 动态地标<id 在状态X中的索引>
         std::map<int,bool> contacts_;   /// 储存腿id和接触状态

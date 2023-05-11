@@ -42,7 +42,7 @@ double t_prev = 0;
 void pub_state()
 {
     //XXX 显示状态估计结果
-    // cout << filter.getState() << endl;  
+    cout << filter.getState() << endl;  
     geometry_msgs::PoseStamped poses;
     nav_msgs::Odometry riekf_esti_msg;
     // 获取当前状态
@@ -117,8 +117,8 @@ void feature_points_depth_callback(const sensor_msgs::PointCloudConstPtr &featur
         ROS_DEBUG("当前帧可用地标数目:%ld", measured_landmarks.size());
         // 使用地标进行更新，更新不需要知道t
         filter.CorrectLandmarks(measured_landmarks);
-        // 发布状态估计结果
-        pub_state();
+        // 发布状态估计结果, 因为imu_measure_callback已经发布过了，这里只更新状态就行
+        // pub_state();
     }
     ROS_INFO_STREAM("\033[1;35m"
                     << "Received LANDMARK observation, correcting state, Time is : " << setprecision(5) << t << ", 耗时: " << t_landmark.toc() << "ms"
@@ -196,7 +196,7 @@ int main(int argc, char** argv)
     // Initialize filter
     filter.setState(initial_state);
     filter.setNoiseParams(noise_params);
-    filter.setG(Eigen::Vector3d(0, 0, -3.72));  //FIXME 重力加速度
+    filter.setG(Eigen::Vector3d(0, 0, -3.65));  //FIXME 重力加速度
     // cout << "Noise parameters are initialized to: \n";
     // cout << filter.getNoiseParams() << endl;
     // cout << "Robot's state is initialized to: \n";

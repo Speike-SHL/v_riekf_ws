@@ -28,6 +28,12 @@
         <param name="AcceBiasNoise" value="0" type="double"/>
         <param name="LandmarkNoise" value="1" type="double"/>
     </node>
+
+    <!-- 保数据节点, SavePath(保存路径) -->
+    <node name="final_data_node" pkg="final_data" type="final_data_node" output="screen">
+        <param name="Ground_truth_savePath" value="/home/speike/v_riekf_ws/src/V-RIEKF/doc/result/ground_truth.txt" type="string"/>
+        <param name="Riekf_esti_savePath" value="/home/speike/v_riekf_ws/src/V-RIEKF/doc/result/riekf_esti.txt" type="string"/>
+    </node>
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find v_riekf)/config/v_riekf_display.rviz"/>
 
 </launch>

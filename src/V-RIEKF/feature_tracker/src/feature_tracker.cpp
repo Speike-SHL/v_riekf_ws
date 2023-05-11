@@ -173,31 +173,33 @@ void FeatureTracker::setMask()
 
     mask = cv::Mat(ROW, COL, CV_8UC1, cv::Scalar(255)); //设置全白灰度图
 
-    vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id; //(追踪次数,特征点,特征点id)
+    vector<pair<int, tuple<cv::Point2f, cv::Point2f ,int>>> cnt_pts_id; //(追踪次数,forw特征点,cur特征点,特征点id),为了排序后prev,cur和forw依然一一对应
     for (uint i = 0; i < forw_pts.size(); i++)
-        cnt_pts_id.push_back(make_pair(track_cnt[i], make_pair(forw_pts[i], ids[i]))); // HACK 为什么不直接用forw_pts的序号作为点id
+        cnt_pts_id.push_back(make_pair(track_cnt[i], make_tuple(forw_pts[i], cur_pts[i] ,ids[i])));
 
     //根据跟踪次数对forw_pts中的特征点排序 //TODO 学习lambda表达式
     sort(cnt_pts_id.begin(), cnt_pts_id.end(),
-        [](const pair<int, pair<cv::Point2f, int>> &a, const pair<int, pair<cv::Point2f, int>> &b)
+        [](const pair<int, tuple<cv::Point2f, cv::Point2f ,int>> &a, const pair<int, tuple<cv::Point2f, cv::Point2f ,int>> &b)
         {
             return a.first > b.first;
         });
 
     // 清空三个容器方便下面按照排序完后的方法重新存入
     forw_pts.clear();
+    cur_pts.clear();
     ids.clear();
     track_cnt.clear();
 
     // 根据排序,优先在跟踪次数多的点处设置mask,然后重新存入三个容器
     for(auto &it:cnt_pts_id)
     {
-        if(mask.at<uchar>(it.second.first)==255)
+        if(mask.at<uchar>(get<0>(it.second))==255)
         {
-            forw_pts.push_back(it.second.first);
-            ids.push_back(it.second.second);
+            forw_pts.push_back(get<0>(it.second));
+            cur_pts.push_back(get<1>(it.second));
+            ids.push_back(get<2>(it.second));
             track_cnt.push_back(it.first);
-            cv::circle(mask, it.second.first, MIN_DIST, 0, -1);
+            cv::circle(mask, get<0>(it.second), MIN_DIST, 0, -1);
         }
     }
 

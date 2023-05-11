@@ -25,7 +25,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: Feature_Point_Img
+    SyncSource: ""
 Preferences:
   PromptSaveOnExit: true
 Toolbars:

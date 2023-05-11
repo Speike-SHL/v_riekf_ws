@@ -30,6 +30,8 @@ double last_image_time = 0;     //上一帧的时间戳
 int pub_count = 1;              //发布帧计数
 bool init_pub = 0;              //是否发布第一帧
 int MAX_CNT = 0;                //最大特征点数,在launch文件中设置
+cv::Mat old_img = cv::Mat(ROW, COL, CV_8UC1, cv::Scalar(0)); //上一帧图像     
+
 
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
@@ -73,7 +75,6 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     // 创建常量共享图像智能指针,将ROS图像转为CV::Mat,并返回灰度图给ptr
     cv_bridge::CvImageConstPtr ptr;
     ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
-    cv::Mat show_img = ptr->image;
 
     // 计时开始正式处理图像
     TicToc t_whole_feature_tracker;
@@ -140,22 +141,22 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     }
 
     // 发布带特征点的图像
-    if (SHOW_TRACK)
+    if (SHOW_TRACK == 1)
     {
         ptr = cv_bridge::cvtColor(ptr, sensor_msgs::image_encodings::BGR8);
         cv::Mat tmp_img = ptr->image; // cv::Mat的等号运算符是浅拷贝,相当于指针仍指向ptr->image
         for (uint i = 0; i < trackerData.cur_pts.size(); i++)
         {
-            if (trackerData.track_cnt[i] <= 5) // 新点用绿色框显示
+            if (trackerData.track_cnt[i] <= 2) // 新点用绿色框显示
             {
                 cv::circle(tmp_img, trackerData.cur_pts[i], 1, cv::Scalar(0, 255, 0), 2);
                 cv::rectangle(tmp_img, cv::Rect(trackerData.cur_pts[i].x - 6, trackerData.cur_pts[i].y - 6, 12, 12), cv::Scalar(0, 255, 0), 1);
             }
-            else if (trackerData.track_cnt[i] > 5 && trackerData.track_cnt[i] <= 30)
+            else if (trackerData.track_cnt[i] > 2 && trackerData.track_cnt[i] <= 20)
                 cv::circle(tmp_img, trackerData.cur_pts[i], 1, cv::Scalar(0, 255, 0), 2); // 绿色
-            else if (trackerData.track_cnt[i] > 30 && trackerData.track_cnt[i] <= 55)
+            else if (trackerData.track_cnt[i] > 20 && trackerData.track_cnt[i] <= 40)
                 cv::circle(tmp_img, trackerData.cur_pts[i], 1, cv::Scalar(255, 0, 0), 2); // 蓝色
-            else if (trackerData.track_cnt[i] > 55 && trackerData.track_cnt[i] <= 80)
+            else if (trackerData.track_cnt[i] > 40 && trackerData.track_cnt[i] <= 60)
                 cv::circle(tmp_img, trackerData.cur_pts[i], 1, cv::Scalar(255, 0, 255), 2); // 紫色
             else
                 cv::circle(tmp_img, trackerData.cur_pts[i], 1, cv::Scalar(0, 0, 255), 2); // 红色
@@ -167,12 +168,83 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         // opencv显示
         if(OPENCV_SHOW)
         {
-        cv::Mat resize_tmp_img;
-        cv::resize(tmp_img, resize_tmp_img, cv::Size(1920,1440));
-        cv::imshow("tmp", resize_tmp_img);
-        cv::waitKey(5);
+            cv::Mat resize_tmp_img;
+            cv::resize(tmp_img, resize_tmp_img, cv::Size(1920,1440));
+            cv::imshow("tmp", resize_tmp_img);
+            cv::waitKey(5);
         }
         feature_img_pub.publish(ptr->toImageMsg());
+    }
+    else if (SHOW_TRACK == 2)
+    {
+        cv::Mat tmp_img1 = ptr->image.clone();  //左半边新图像
+        cv::Mat tmp_img2 = old_img.clone();  //右半边老图像
+        cv::cvtColor(tmp_img1, tmp_img1, cv::COLOR_GRAY2BGR);
+        cv::cvtColor(tmp_img2, tmp_img2, cv::COLOR_GRAY2BGR);
+        if (tmp_img1.rows != tmp_img2.rows)
+        {
+            ROS_ERROR("拼接图像失败，两幅图像行数不一致!");
+            return;
+        }
+        cv::Mat tmp_img_fusion;
+        cv::hconcat(tmp_img1, tmp_img2, tmp_img_fusion);
+        cv::Point2f shift = cv::Point2f(tmp_img1.cols, 0);
+        for (uint i = 0; i < trackerData.cur_pts.size(); i++)  
+        {
+            if (i< trackerData.prev_pts.size()) //绘制左右两边都有的点
+            {
+                if (trackerData.track_cnt[i] > 1 && trackerData.track_cnt[i] <= 20)
+                {
+                    cv::circle(tmp_img_fusion, trackerData.cur_pts[i], 1, cv::Scalar(0, 255, 0), 2); // 绿色
+                    cv::circle(tmp_img_fusion, trackerData.prev_pts[i]+shift, 1, cv::Scalar(0, 255, 0), 2);
+                    cv::line(tmp_img_fusion, trackerData.cur_pts[i], trackerData.prev_pts[i]+shift, cv::Scalar(0, 255, 0), 1);
+                }
+                else if (trackerData.track_cnt[i] > 20 && trackerData.track_cnt[i] <= 40)
+                {
+                    cv::circle(tmp_img_fusion, trackerData.cur_pts[i], 1, cv::Scalar(255, 0, 0), 2); // 蓝色
+                    cv::circle(tmp_img_fusion, trackerData.prev_pts[i]+shift, 1, cv::Scalar(255, 0, 0), 2);
+                    cv::line(tmp_img_fusion, trackerData.cur_pts[i], trackerData.prev_pts[i]+shift, cv::Scalar(255, 0, 0), 1);
+                }
+                else if (trackerData.track_cnt[i] > 40 && trackerData.track_cnt[i] <= 60)
+                {
+                    cv::circle(tmp_img_fusion, trackerData.cur_pts[i], 1, cv::Scalar(255, 0, 255), 2); // 紫色
+                    cv::circle(tmp_img_fusion, trackerData.prev_pts[i]+shift, 1, cv::Scalar(255, 0, 255), 2);
+                    cv::line(tmp_img_fusion, trackerData.cur_pts[i], trackerData.prev_pts[i]+shift, cv::Scalar(255, 0, 255), 1);
+                }
+                else
+                {
+                    cv::circle(tmp_img_fusion, trackerData.cur_pts[i], 1, cv::Scalar(0, 0, 255), 2); // 红色
+                    cv::circle(tmp_img_fusion, trackerData.prev_pts[i]+shift, 1, cv::Scalar(0, 0, 255), 2);
+                    cv::line(tmp_img_fusion, trackerData.cur_pts[i], trackerData.prev_pts[i]+shift, cv::Scalar(0, 0, 255), 1);
+                }
+            }
+            else    //绘制新出现的点
+            {
+                cv::circle(tmp_img_fusion, trackerData.cur_pts[i], 1, cv::Scalar(0, 255, 0), 2);
+                cv::rectangle(tmp_img_fusion, cv::Rect(trackerData.cur_pts[i].x - 6, trackerData.cur_pts[i].y - 6, 12, 12), cv::Scalar(0, 255, 0), 1);
+            }
+            char name[10]; // 显示跟踪次数
+            sprintf(name, "%d", trackerData.track_cnt[i]);
+            cv::putText(tmp_img_fusion, name, trackerData.cur_pts[i], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+        }
+        // opencv显示
+        if(OPENCV_SHOW)
+        {
+            cv::Mat resize_tmp_img;
+            cv::resize(tmp_img_fusion, resize_tmp_img, cv::Size(2560,960));
+            cv::imshow("tmp", resize_tmp_img);
+            // double t = img_msg->header.stamp.toSec() / 1000;
+            // string name = string("/home/speike/图片/temp/") + to_string(t) + string(".png");
+            // cv::imwrite(name, resize_tmp_img);
+            cv::waitKey(5);
+        }
+        cv_bridge::CvImage img_fusion;
+        img_fusion.header = ptr->header;
+        img_fusion.encoding = sensor_msgs::image_encodings::BGR8;
+        img_fusion.image = tmp_img_fusion;
+        feature_img_pub.publish(img_fusion.toImageMsg());
+        
+        old_img = ptr->image.clone();
     }
 
     ROS_INFO("-->总特征跟踪时间为: %fms", t_whole_feature_tracker.toc());

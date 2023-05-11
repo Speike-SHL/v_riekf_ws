@@ -42,7 +42,7 @@ double t_prev = 0;
 void pub_state()
 {
     //XXX 显示状态估计结果
-    cout << std::fixed << std::setprecision(2) << filter.getState() << endl;  
+    // cout << filter.getState() << endl;  
     geometry_msgs::PoseStamped poses;
     nav_msgs::Odometry riekf_esti_msg;
     // 获取当前状态

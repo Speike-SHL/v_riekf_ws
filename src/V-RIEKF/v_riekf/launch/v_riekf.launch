@@ -10,7 +10,7 @@
     <!-- 特征提取节点, CAMERA_INTRINSICS_PATH(相机内参文件路径), MAX_CNT(特征点最大个数)-->
     <node name="feature_tracker_node" pkg="feature_tracker" type="feature_tracker_node" output="screen">
         <param name="CAMERA_INTRINSICS_PATH" value="$(find feature_tracker)/config/camera.yaml" type="string"/>
-        <param name="MAX_CNT" value="40" type="int"/>
+        <param name="MAX_CNT" value="50" type="int"/>
     </node>
 
     <!-- 获取深度节点,MAX_RANGE(深度相机最大范围),MIN_RANGE(深度相机最小范围) -->

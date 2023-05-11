@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     nav_msgs::Path ground_truth_path_msg;   //循环外创建path对象，用于保存以往路径点
 
     ros::Rate loop_rate_fast(Rate);
-    ros::Duration(3.0).sleep();
+    ros::Duration(5.0).sleep();
     while (ros::ok())
     {
         if(t == End_Flag) 

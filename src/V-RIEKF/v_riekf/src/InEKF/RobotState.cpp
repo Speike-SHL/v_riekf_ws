@@ -255,7 +255,7 @@ ostream& operator<<(ostream& os, const RobotState& s) {
     X_Theta.block<3, 1>(0, 6) = s.Theta_.tail(3);
 
     //打印精度
-    int precision = 2;
+    int precision = 3;
 
     os << "--------------------------- Robot State --------------------------" << endl;
     os << left << setprecision(precision) << fixed;

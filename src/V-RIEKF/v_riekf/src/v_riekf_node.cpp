@@ -177,8 +177,8 @@ int main(int argc, char** argv)
     R0 << 1, 0, 0, 0, 1, 0, 0, 0, 1;//初始化IMU旋转矩阵
     v0 << 0, 0, 0;                  //初始化速度
     p0 << 0, 0, 0;                  //初始化位置
-    bg0 << 0, 0, 0;                 //初始化陀螺仪bias
-    ba0 << 0, 0, 0;                 //初始化加速度计bias
+    bg0 << 0, 0.001, 0;                 //初始化陀螺仪bias
+    ba0 << 0.01, -0.024, 0.039;                 //初始化加速度计bias
     initial_state.setRotation(R0);
     initial_state.setVelocity(v0);
     initial_state.setPosition(p0);
@@ -196,7 +196,7 @@ int main(int argc, char** argv)
     // Initialize filter
     filter.setState(initial_state);
     filter.setNoiseParams(noise_params);
-    filter.setG(Eigen::Vector3d(0, 0, -3.65));  //FIXME 重力加速度
+    filter.setG(Eigen::Vector3d(0, 0, -3.68));  //FIXME 重力加速度
     // cout << "Noise parameters are initialized to: \n";
     // cout << filter.getNoiseParams() << endl;
     // cout << "Robot's state is initialized to: \n";

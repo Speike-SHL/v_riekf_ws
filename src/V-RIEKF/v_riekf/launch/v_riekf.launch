@@ -3,7 +3,7 @@
     <!-- 获取数据节点, DataSetPath(数据集路径), Rata(节点发布频率), End_flag(最后一帧数据的时间戳,用于退出节点) -->
     <node name="origin_data_node" pkg="origin_data" type="origin_data_node" output="screen">
         <param name="DataSetPath" value="/media/speike/Data/DataSet/Data/imu_noise" type="string"/>
-        <param name="End_Flag" value="120.00000000" type="string"/>
+        <param name="End_Flag" value="60.00000000" type="string"/>
         <param name="Rate" value="125" type="int"/>
     </node>
 
@@ -24,16 +24,17 @@
         <!-- //FIXME 噪声数据 -->
         <param name="GyroNoise" value="1" type="double"/>     
         <param name="AcceNoise" value="1" type="double"/>
-        <param name="GyroBiasNoise" value="0" type="double"/>
-        <param name="AcceBiasNoise" value="0" type="double"/>
+        <param name="GyroBiasNoise" value="0.01" type="double"/>
+        <param name="AcceBiasNoise" value="0.04" type="double"/>
         <param name="LandmarkNoise" value="1" type="double"/>
     </node>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find v_riekf)/config/v_riekf_display.rviz"/>
 
     <!-- 保数据节点, SavePath(保存路径) -->
     <!-- <node name="final_data_node" pkg="final_data" type="final_data_node" output="screen">
         <param name="Ground_truth_savePath" value="/home/speike/v_riekf_ws/src/V-RIEKF/doc/result/ground_truth.txt" type="string"/>
         <param name="Riekf_esti_savePath" value="/home/speike/v_riekf_ws/src/V-RIEKF/doc/result/riekf_esti.txt" type="string"/>
     </node> -->
-    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find v_riekf)/config/v_riekf_display.rviz"/>
 
 </launch>
